@@ -8,11 +8,7 @@
                :on-close #(prn "Closing a connection")})
 
 
-(def socket (ws/create "ws://localhost:9090" handlers))
-
-;; (js/console.log socket)
-
-(js/console.log (ws/status socket))
+(def socket (ws/create "ws://localhost:9090/ws" handlers))
 
 (js/setTimeout #(ws/send socket {:command "check"} fmt/json) 2000)
 ;; (ws/send socket "ping")
