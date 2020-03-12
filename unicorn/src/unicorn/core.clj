@@ -37,7 +37,7 @@
   (println (:body req))
   {:status 200 :body (:body req)})
 
-;; WebStockets
+;; WebSockets
 
 (def clients (atom {}))
 
