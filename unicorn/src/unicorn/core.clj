@@ -30,14 +30,19 @@
    :headers {"Content-Type" "text/html"}
    :body "All hail General Zod!"})
 
-;; This endpoint can receive json
-
-(defn save-configuration
-  [req]
-  (println (:body req))
-  {:status 200 :body (:body req)})
-
 ;; WebSockets
+
+;; - Read task for scheduler
+;; - TASKS could have types:
+;;     * VIDEO
+;;     * EVENT
+;;     * ????
+
+(defn secs [seconds] (* 1000 seconds))
+
+(def tasks [{:type "VIDEO" :time (+ (System/currentTimeMillis) (secs 10)) :data "JSON_DATA_VIDEO"}
+            {:type "EVENT" :time (+ (System/currentTimeMillis) (secs 20)) :data "JSON_DATA_EVENT"}])
+
 
 (def clients (atom {}))
 
@@ -62,6 +67,30 @@
         (recur (inc id))))
     (server/on-close channel (fn [status] (println "channel closed: " status)))
     (server/on-receive channel #(on-receive-handler % channel))))
+
+;; - Pass tasks to ____ to program scheduler
+
+(defn int-or-nothing [number] (if (pos-int? number) number nil))
+
+(defn scheduler-generator
+  "It function receive a UNIX-timestamp and will calculate the rest time in ms
+  to execute the task. (Well don't know if this is the correct approach)"
+  [unix-time f data]
+  (if-let [time (int-or-nothing (- unix-time (System/currentTimeMillis)))]
+    (schedule-task time (f data))))
+
+(defn prepare-tasks
+  [tasks]
+  (doseq [task tasks]
+    (scheduler-generator (:time task) send-to-all (:data task))))
+
+;; This endpoint can receive json
+
+(defn save-configuration
+  [req]
+  (prepare-tasks tasks)
+  {:status 200 :body (:body req)})
+
 
 ;; Router
 
