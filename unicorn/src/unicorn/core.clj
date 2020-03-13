@@ -18,14 +18,13 @@
 
 
 (def ^MongoOptions opts (mg/mongo-options {:threads-allowed-to-block-for-connection-multipler 300}))
-
 (def ^ServerAddress sa (mg/server-address "127.0.0.1" 27017))
-
 (def conn (mg/connect sa opts))
 
 (def db (mg/get-db conn "cinema-lambda"))
 
 ;; Functions to DB
+
 (defn insert-payment-db [doc]
   (mc/insert-and-return db "payments" {:sl_id (:id doc) :sl_name (:name doc)}))
 
