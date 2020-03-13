@@ -5,47 +5,67 @@
             [compojure.route :as route]
             [clojure.data.json :as json]
             [ring.middleware.json :refer [wrap-json-body wrap-json-response]]
+            [ring.middleware.params :refer [wrap-params]]
             [ring.util.response :refer [response]]
-            [org.httpkit.timer :refer :all]))
+            [org.httpkit.timer :refer :all]
+            [monger.core :as mg]
+            [monger.collection :as mc]
+            [monger.json])
+  (:import [com.mongodb MongoOptions ServerAddress]))
 
-;; API
 
-(defn fps-handler [req]
-  {:status 200
-   :headers {"Content-Type" "text/html"}
-   :body "Pew, Pew!"})
+;; Db Connection
 
-(defn mail-man []
-  "{\"Spongebob Narrator\": \"5 years later ...\"}")
 
-(defn main-handler
-  [req]
-  {:status 200
-   :headers {"Content-type" "text/json"}
-   :body (mail-man)})
+(def ^MongoOptions opts (mg/mongo-options {:threads-allowed-to-block-for-connection-multipler 300}))
 
-(defn general-handler
-  [req]
-  {:status 200
-   :headers {"Content-Type" "text/html"}
-   :body "All hail General Zod!"})
+(def ^ServerAddress sa (mg/server-address "127.0.0.1" 27017))
 
-;; WebSockets
+(def conn (mg/connect sa opts))
 
-;; - Read task for scheduler
-;; - TASKS could have types:
-;;     * VIDEO
-;;     * EVENT
-;;     * ????
+(def db (mg/get-db conn "cinema-lambda"))
+
+;; Functions to DB
+(defn insert-payment-db [doc]
+  (mc/insert-and-return db "payments" {:sl_id (:id doc) :sl_name (:name doc)}))
+
+(defn insert-code-db [code]
+  (mc/insert-and-return db "codes" {:code code :used false }))
+
+(defn find-code-db [code]
+  (mc/find-one-as-map db "codes" {:code code}))
+
+
+;; Utils
+
+
+(defn generate-code []
+  (let [code (.toString (java.util.UUID/randomUUID))]
+    (insert-code-db code)))
 
 (defn secs [seconds] (* 1000 seconds))
+
+(defn int-or-nothing [number] (if (pos-int? number) number nil))
+
+
+;; General States
+
+
+(def clients (atom {}))
+
+;; TASKS could have types:
+;;   * VIDEO
+;;   * EVENT
+;;   * ????
 
 (def tasks [{:type "VIDEO" :time (+ (System/currentTimeMillis) (secs 10)) :data "JSON_DATA_VIDEO"}
             {:type "EVENT" :time (+ (System/currentTimeMillis) (secs 20)) :data "JSON_DATA_EVENT"}])
 
 
-(def clients (atom {}))
+;; WebSockets
 
+
+;; Read task for scheduler
 (defn send-to-all [msg]
   (doseq [client (keys @clients)]
     (server/send! client msg)))
@@ -70,8 +90,6 @@
 
 ;; - Pass tasks to ____ to program scheduler
 
-(defn int-or-nothing [number] (if (pos-int? number) number nil))
-
 (defn scheduler-generator
   "It function receive a UNIX-timestamp and will calculate the rest time in ms
   to execute the task. (Well don't know if this is the correct approach)"
@@ -84,22 +102,39 @@
   (doseq [task tasks]
     (scheduler-generator (:time task) send-to-all (:data task))))
 
-;; This endpoint can receive json
+
+;; API
+;; These endpoint can receive JSON
+
 
 (defn save-configuration
   [req]
   (prepare-tasks tasks)
   {:status 200 :body (:body req)})
 
+(defn pay
+  [req]
+  (insert-payment-db (:body req))
+  (let [code (generate-code)]
+    {:status 200 :body code}))
+
+(defn verify-code
+  [code]
+  (if-let [code (find-code-db code)]
+    {:status 200 :body {:access true}}
+    {:status 404 :body {:access false :msg "Code no valid!"}}))
+
 
 ;; Router
 
+
 (defroutes app-routes
-  (GET "/" [] fps-handler)
+  (GET "/" [] (str "Welcome to home!"))
   (GET "/ws" [] ws-handler)
-  (POST "/postoffice" [] main-handler)
-  (ANY "/anything-goes" [] general-handler)
+  (ANY "/anything-goes" [] (str "Any method accepted"))
   (POST "/save-configuration" [] save-configuration)
+  (POST "/pay" [] pay)
+  (GET "/verify-code" [code] (verify-code code))
   (route/not-found "You must be new here"))
 
 (defn -main
@@ -107,6 +142,7 @@
   [& args]
   (let [port (Integer/parseInt (or (System/getenv "PORT") "9090"))]
     (server/run-server (-> #'app-routes
+                           wrap-params
                            (#(wrap-json-body % {:keywords? true}))
                            wrap-json-response) {:port port})
     (println (str "Running at localhost in port: " port))))
