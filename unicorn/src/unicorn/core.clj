@@ -77,13 +77,7 @@
 
 (defn ws-handler [request]
   (server/with-channel request channel
-    ;; (println channel)
     (swap! clients assoc channel true)
-    (loop [id 0]
-      (when (< id 10)
-        (schedule-task (* id 2000)
-                       (server/send! channel (str "message from the server #" id) false))
-        (recur (inc id))))
     (server/on-close channel (fn [status] (println "channel closed: " status)))
     (server/on-receive channel #(on-receive-handler % channel))))
 
