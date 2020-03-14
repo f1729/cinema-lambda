@@ -64,7 +64,6 @@
 ;; WebSockets
 
 
-;; Read task for scheduler
 (defn send-to-all [msg]
   (doseq [client (keys @clients)]
     (server/send! client msg)))
