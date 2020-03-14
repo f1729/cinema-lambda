@@ -44,8 +44,6 @@
 
 (defn secs [seconds] (* 1000 seconds))
 
-(defn int-or-nothing [number] (if (pos-int? number) number nil))
-
 
 ;; General States
 
@@ -86,8 +84,9 @@
   "It function receive a UNIX-timestamp and will calculate the rest time in ms
   to execute the task. (Well don't know if this is the correct approach)"
   [unix-time f data]
-  (if-let [time (int-or-nothing (- unix-time (System/currentTimeMillis)))]
-    (schedule-task time (f data))))
+  (let [diff (- unix-time (System/currentTimeMillis))]
+    (when (> diff 0)
+      (schedule-task time (f data)))))
 
 (defn prepare-tasks
   [tasks]
