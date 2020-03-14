@@ -44,6 +44,8 @@
 
 (defn secs [seconds] (* 1000 seconds))
 
+(defn int-or-nothing [number] (if (pos-int? number) number nil))
+
 
 ;; General States
 
@@ -62,6 +64,7 @@
 ;; WebSockets
 
 
+;; Read task for scheduler
 (defn send-to-all [msg]
   (doseq [client (keys @clients)]
     (server/send! client msg)))
@@ -86,7 +89,7 @@
   [unix-time f data]
   (let [diff (- unix-time (System/currentTimeMillis))]
     (when (> diff 0)
-      (schedule-task time (f data)))))
+      (schedule-task diff (f data)))))
 
 (defn prepare-tasks
   [tasks]
